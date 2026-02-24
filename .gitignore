@@ -1,0 +1,11 @@
+# Scraped CSV data
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+venv/
+.venv/
+
