@@ -1,6 +1,6 @@
 # Numbeo Web Scraping Capstone
 
-A 4-program Python demo project showing end-to-end web scraping, database import,
+A Python demo project showing end-to-end web scraping, database import,
 querying, and dashboard visualization using data from [Numbeo.com](https://www.numbeo.com).
 
 ## Datasets
