@@ -77,7 +77,7 @@ streamlit run 4_dashboard.py
 
 **Tabs:**
 - **Top Cities Bar Chart** — Horizontal bar chart, Top N cities by chosen index
-- **Cost of Living vs Crime** — Scatter plot with optional OLS trendline
+- **Cost vs Crime Quadrants** — Quadrant chart coloring cities by Affordable/Expensive × Safe/Dangerous
 - **City Comparison Radar** — Radar chart comparing QoL sub-indices across cities
 
 ---

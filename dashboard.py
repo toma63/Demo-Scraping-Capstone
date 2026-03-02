@@ -5,7 +5,7 @@ Interactive Streamlit dashboard visualizing Numbeo city ranking data.
 
 Tabs:
   1. Top Cities Bar Chart   — Horizontal bar chart, top N by selected index
-  2. Cost of Living vs Crime — Scatter plot with optional trendline
+  2. Cost vs Crime Quadrants  — Quadrant chart colored by Affordable/Expensive × Safe/Dangerous
   3. City Comparison        — Radar chart comparing QoL sub-indices across cities
 
 Usage:
@@ -138,9 +138,9 @@ with st.sidebar:
         max_selections=10,
     )
 
-    # Trendline toggle (Tab 2)
-    st.subheader("Tab 2 — Scatter")
-    show_trendline = st.checkbox("Show trendline (OLS)", value=True)
+    # Label toggle (Tab 2)
+    st.subheader("Tab 2 — Quadrant")
+    show_labels = st.checkbox("Label outlier cities", value=True)
 
 
 # ---------------------------------------------------------------------------
@@ -161,7 +161,7 @@ def filter_df(df: pd.DataFrame, yr: str, countries: list[str]) -> pd.DataFrame:
 tab1, tab2, tab3 = st.tabs([
     # you can get emojis from https://emojipedia.org/
     "📊 Top Cities Bar Chart",
-    "🔵 Cost of Living vs Crime",
+    "🔵 Cost vs Crime Quadrants",
     "🕸️ City Comparison Radar",
 ])
 
@@ -204,19 +204,18 @@ with tab1:
                 use_container_width=True,
             )
 
-# ── Tab 2: Cost of Living vs Crime scatter ────────────────────────────────────
+# ── Tab 2: Cost of Living vs Crime — Quadrant Chart ──────────────────────────
 
 with tab2:
-    st.subheader(f"Cost of Living vs Crime Index ({year})")
+    st.subheader(f"Cost of Living vs Crime — Quadrant View ({year})")
 
-    df_col = filter_df(col, year, selected_countries)[["city", "country", "cost_of_living_index", "year"]]
-    df_crime = filter_df(crime, year, selected_countries)[["city", "country", "crime_index", "safety_index"]]
+    df_col2 = filter_df(col, year, selected_countries)[["city", "country", "cost_of_living_index", "year"]]
+    df_crime2 = filter_df(crime, year, selected_countries)[["city", "country", "crime_index", "safety_index"]]
 
     merged = pd.merge(
-        df_col, df_crime,
+        df_col2, df_crime2,
         on=["city", "country"],
         how="inner",
-        suffixes=("_col", "_crime"),
     ).dropna(subset=["cost_of_living_index", "crime_index"])
 
     if merged.empty:
@@ -225,39 +224,102 @@ with tab2:
             "Try removing country filters or selecting a different year."
         )
     else:
-        trendline_arg = "ols" if show_trendline else None
+        med_col = merged["cost_of_living_index"].median()
+        med_crime = merged["crime_index"].median()
 
-        try:
-            fig2 = px.scatter(
-                merged,
-                x="cost_of_living_index",
-                y="crime_index",
-                color="country",
-                hover_name="city",
-                hover_data={"country": True, "safety_index": True},
-                trendline=trendline_arg,
-                title=f"Cost of Living vs Crime Index ({year})",
-                labels={
-                    "cost_of_living_index": "Cost of Living Index",
-                    "crime_index": "Crime Index",
-                },
-                height=550,
-                color_discrete_sequence=px.colors.qualitative.Safe,
-            )
-            fig2.update_traces(marker=dict(size=8, opacity=0.75))
-            fig2.update_layout(
-                legend_title="Country",
-                margin=dict(l=10, r=10, t=50, b=10),
-            )
-            st.plotly_chart(fig2, use_container_width=True)
-        except Exception as exc:
-            st.error(f"Could not render scatter plot: {exc}")
-            st.info("Try disabling the trendline (requires statsmodels).")
+        def _quadrant(row):
+            hi_cost = row["cost_of_living_index"] >= med_col
+            hi_crime = row["crime_index"] >= med_crime
+            if hi_cost and hi_crime:
+                return "Expensive & Dangerous"
+            elif hi_cost:
+                return "Expensive but Safe"
+            elif hi_crime:
+                return "Affordable but Dangerous"
+            return "Affordable & Safe"
 
-        st.caption(f"{len(merged)} cities plotted after joining Cost of Living and Crime tables.")
+        merged["quadrant"] = merged.apply(_quadrant, axis=1)
+
+        color_map = {
+            "Expensive & Dangerous":    "#e74c3c",
+            "Expensive but Safe":       "#3498db",
+            "Affordable but Dangerous": "#e67e22",
+            "Affordable & Safe":        "#2ecc71",
+        }
+
+        fig2 = px.scatter(
+            merged,
+            x="cost_of_living_index",
+            y="crime_index",
+            color="quadrant",
+            color_discrete_map=color_map,
+            hover_name="city",
+            hover_data={"country": True, "safety_index": True, "quadrant": False},
+            title=f"Cost of Living vs Crime Index ({year})",
+            labels={
+                "cost_of_living_index": "Cost of Living Index",
+                "crime_index": "Crime Index",
+                "quadrant": "",
+            },
+            height=550,
+        )
+
+        fig2.add_vline(
+            x=med_col, line_dash="dash", line_color="gray", opacity=0.5,
+            annotation_text=f"Median CoL {med_col:.0f}",
+            annotation_position="top left",
+            annotation_font_size=11,
+        )
+        fig2.add_hline(
+            y=med_crime, line_dash="dash", line_color="gray", opacity=0.5,
+            annotation_text=f"Median Crime {med_crime:.0f}",
+            annotation_position="bottom right",
+            annotation_font_size=11,
+        )
+
+        if show_labels:
+            merged["_dist"] = (
+                (merged["cost_of_living_index"] - med_col) ** 2
+                + (merged["crime_index"] - med_crime) ** 2
+            ) ** 0.5
+            top_outliers = (
+                merged.sort_values("_dist", ascending=False)
+                .groupby("quadrant")
+                .head(3)
+            )
+            for _, row in top_outliers.iterrows():
+                fig2.add_annotation(
+                    x=row["cost_of_living_index"],
+                    y=row["crime_index"],
+                    text=row["city"],
+                    showarrow=True,
+                    arrowhead=1,
+                    arrowwidth=1,
+                    arrowsize=0.7,
+                    ax=18,
+                    ay=-18,
+                    font=dict(size=9),
+                    bgcolor="rgba(255,255,255,0.7)",
+                )
+
+        fig2.update_traces(marker=dict(size=8, opacity=0.75))
+        fig2.update_layout(
+            legend_title="",
+            margin=dict(l=10, r=10, t=50, b=10),
+        )
+        st.plotly_chart(fig2, use_container_width=True)
+
+        st.caption(
+            f"{len(merged)} cities plotted. "
+            "Dashed lines show median values — quadrants highlight cities that are "
+            "above/below median cost of living and crime."
+        )
 
         with st.expander("View data table"):
-            st.dataframe(merged, use_container_width=True)
+            st.dataframe(
+                merged[["city", "country", "cost_of_living_index", "crime_index", "safety_index", "quadrant"]],
+                use_container_width=True,
+            )
 
 # ── Tab 3: Radar chart — compare cities across QoL sub-indices ───────────────
 
