@@ -19,6 +19,8 @@ Years covered: **current, 2023, 2024, 2025**
 ## Setup
 
 ```bash
+python -m venv .venv
+source .venv/Scripts/activate
 pip install -r requirements.txt
 ```
 
