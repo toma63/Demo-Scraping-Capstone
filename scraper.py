@@ -132,8 +132,10 @@ def scrape_table(driver: webdriver.Chrome, url: str) -> list[list[str]]:
             next_btn = driver.find_element(By.ID, "t2_next")
             if "disabled" in (next_btn.get_attribute("class") or ""):
                 break
+            first_row = driver.find_elements(By.CSS_SELECTOR, "table#t2 tbody tr")[0]
             next_btn.click()
-            time.sleep(1.0)
+            wait.until(EC.staleness_of(first_row))
+            wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "table#t2 tbody tr")))
         except NoSuchElementException:
             break  # No pagination present - single-page table
 
