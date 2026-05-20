@@ -79,6 +79,7 @@ def make_driver() -> webdriver.Chrome:
     options.add_argument("--window-size=1920,1080")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
     options.add_argument(
         "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -87,7 +88,12 @@ def make_driver() -> webdriver.Chrome:
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option("useAutomationExtension", False)
 
-    service = Service(ChromeDriverManager().install())
+    snap_chromedriver = "/snap/bin/chromium.chromedriver"
+    if os.path.exists(snap_chromedriver):
+        service = Service(snap_chromedriver)
+        # Do NOT set binary_location — snap chromedriver finds Chromium itself
+    else:
+        service = Service(ChromeDriverManager().install())
     driver = webdriver.Chrome(service=service, options=options)
     # Mask WebDriver navigator property
     driver.execute_cdp_cmd(
